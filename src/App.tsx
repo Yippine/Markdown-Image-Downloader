@@ -17,6 +17,7 @@ function App() {
   });
   const [downloadReady, setDownloadReady] = useState(false);
   const [zipBlob, setZipBlob] = useState<Blob | null>(null);
+  const [fileName, setFileName] = useState<string>('');
 
   const handleFileSelect = async (file: File) => {
     if (!isMarkdownFile(file)) {
@@ -26,11 +27,25 @@ function App() {
 
     setProcessing(true);
     setDownloadReady(false);
+    setFileName(file.name.replace(/\.(md|markdown)$/, ''));
     
     try {
       const content = await readFileAsText(file);
       const links = extractImageLinks(content);
       
+      if (links.length === 0) {
+        alert('No images found in the Markdown file');
+        setProcessing(false);
+        return;
+      }
+
+      setStatus({
+        total: links.length,
+        processed: 0,
+        successful: 0,
+        failed: 0
+      });
+
       const imageLinks: ImageLink[] = await Promise.all(
         links.map(async (url) => ({
           url,
@@ -40,6 +55,12 @@ function App() {
 
       const validImages = imageLinks.filter(img => img.isValid);
       
+      if (validImages.length === 0) {
+        alert('No valid images found in the Markdown file');
+        setProcessing(false);
+        return;
+      }
+
       const blob = await downloadImages(validImages, setStatus);
       setZipBlob(blob);
       setDownloadReady(true);
@@ -57,7 +78,7 @@ function App() {
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `images-${new Date().toISOString().split('T')[0]}.zip`;
+    a.download = `${fileName}-images-${new Date().toISOString().split('T')[0]}.zip`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -83,13 +104,25 @@ function App() {
         )}
 
         {downloadReady && (
-          <button
-            onClick={handleDownload}
-            className="w-full bg-blue-600 text-white rounded-lg py-3 px-6 flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
-          >
-            <Download className="w-5 h-5" />
-            Download Images
-          </button>
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-green-800">
+                Successfully processed {status.successful} out of {status.total} images
+              </p>
+              {status.failed > 0 && (
+                <p className="text-amber-600 mt-2">
+                  Failed to process {status.failed} images
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleDownload}
+              className="w-full bg-blue-600 text-white rounded-lg py-3 px-6 flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
+            >
+              <Download className="w-5 h-5" />
+              Download Images
+            </button>
+          </div>
         )}
       </div>
     </div>
